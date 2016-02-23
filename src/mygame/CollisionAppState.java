@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package mygame;
 
 import com.jme3.app.Application;
@@ -11,20 +6,13 @@ import com.jme3.app.state.AbstractAppState;
 import com.jme3.app.state.AppStateManager;
 import com.simsilica.es.Entity;
 import com.simsilica.es.EntityData;
-import com.simsilica.es.EntityId;
 import com.simsilica.es.EntitySet;
-import java.util.logging.Logger;
 
-/**
- *
- * @author cli
- */
 public class CollisionAppState extends AbstractAppState {
 
-    private static final Logger logger = Logger.getLogger(DecayAppState.class.getName());
     private SimpleApplication app;
     private EntityData ed;
-    private EntitySet damagingParts;
+    private EntitySet attackingParts;
     private EntitySet defendingParts;
 
     @Override
@@ -34,29 +22,51 @@ public class CollisionAppState extends AbstractAppState {
         this.app = (SimpleApplication) app;
         this.ed = this.app.getStateManager().getState(EntityDataState.class).getEntityData();
 
-        damagingParts = ed.getEntities(CollisionShape.class, Position.class);
-        defendingParts = ed.getEntities(CollisionShape.class, Position.class);
+        attackingParts = ed.getEntities(Attack.class, CollisionShape.class, Position.class);
+        defendingParts = ed.getEntities(Defense.class, CollisionShape.class, Position.class);
     }
 
     @Override
     public void update(float tpf) {
-        damagingParts.applyChanges();
+        attackingParts.applyChanges();
         defendingParts.applyChanges();
-        damagingParts.stream().forEach((damagingPart) -> {
+        attackingParts.stream().forEach((attackingPart) -> {
             defendingParts.stream().forEach((defendingPart) -> {
-                if (Colliders.hasCollides(damagingPart, defendingPart)) {
+                if (hasCollides(attackingPart, defendingPart)) {
+                    Attack attack = attackingPart.get(Attack.class);
+                    Defense defense = defendingPart.get(Defense.class);
+                    attackingPart.set(new Attack(attack.getPower() - defense.getPower()));
+                    defendingPart.set(new Defense(defense.getPower() - attack.getPower()));
+                    if (attackingPart.get(Attack.class).getPower() <=0 ) {
+                        ed.removeEntity(attackingPart.getId());
+                    }
+                    if (defendingPart.get(Defense.class).getPower() <= 0) {
+                        ed.removeEntity(defendingPart.getId());
+                    }
                 }
             });
         });
     }
 
+    private boolean hasCollides(Entity e1, Entity e2) {
+        CollisionShape e1Shape = e1.get(CollisionShape.class);
+        CollisionShape e2Shape = e2.get(CollisionShape.class);
+        Position e1Pos = e1.get(Position.class);
+        Position e2Pos = e2.get(Position.class);
+
+        float threshold = e1Shape.getRadius() + e2Shape.getRadius();
+        threshold *= threshold;
+        float distance = e1Pos.getLocation().distanceSquared(e2Pos.getLocation());
+
+        return distance < threshold;
+    }
+
     @Override
     public void cleanup() {
         super.cleanup();
-        damagingParts.release();
-        damagingParts = null;
+        attackingParts.release();
+        attackingParts = null;
         defendingParts.release();
         defendingParts = null;
     }
-
 }
